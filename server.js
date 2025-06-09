@@ -1,3 +1,5 @@
+// server.js (safe version)
+
 import Fastify from "fastify";
 import fastifyWs from "@fastify/websocket";
 import fastifyFormBody from "@fastify/formbody";
@@ -6,7 +8,19 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const PORT = process.env.PORT || 8080;
-const DOMAIN = process.env.NGROK_URL;
+const DOMAIN = process.env.DOMAIN;
+
+// SAFETY CHECKS: prevent Fly unhealthy loops
+if (!process.env.OPENAI_API_KEY) {
+  console.error("❌ ERROR: Missing OPENAI_API_KEY — exiting.");
+  process.exit(1);
+}
+
+if (!DOMAIN) {
+  console.error("❌ ERROR: Missing DOMAIN — exiting.");
+  process.exit(1);
+}
+
 const WS_URL = `wss://${DOMAIN}/ws`;
 const WELCOME_GREETING =
   "Hi! I am a voice assistant powered by Twilio and Open A I . Ask me anything!";
@@ -15,6 +29,7 @@ const SYSTEM_PROMPT =
 const sessions = new Map();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
 async function aiResponse(messages) {
   let completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -26,6 +41,7 @@ async function aiResponse(messages) {
 const fastify = Fastify();
 fastify.register(fastifyWs);
 fastify.register(fastifyFormBody);
+
 fastify.all("/twiml", async (request, reply) => {
   reply.type("text/xml").send(
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -49,6 +65,7 @@ fastify.register(async function (fastify) {
           ws.callSid = callSid;
           sessions.set(callSid, [{ role: "system", content: SYSTEM_PROMPT }]);
           break;
+
         case "prompt":
           console.log("Processing prompt:", message.voicePrompt);
           const conversation = sessions.get(ws.callSid);
@@ -66,9 +83,11 @@ fastify.register(async function (fastify) {
           );
           console.log("Sent response:", response);
           break;
+
         case "interrupt":
           console.log("Handling interruption.");
           break;
+
         default:
           console.warn("Unknown message type received:", message.type);
           break;
@@ -82,12 +101,14 @@ fastify.register(async function (fastify) {
   });
 });
 
+// ✅ Listen on 0.0.0.0 for Fly.io compatibility
 try {
-  fastify.listen({ port: PORT });
-  console.log(
-    `Server running at http://localhost:${PORT} and wss://${DOMAIN}/ws`
-  );
+  fastify.listen({ port: PORT, host: "0.0.0.0" }, () => {
+    console.log(
+      `✅ Server running at http://localhost:${PORT} and wss://${DOMAIN}/ws`
+    );
+  });
 } catch (err) {
-  fastify.log.error(err);
+  console.error("❌ Error starting server:", err);
   process.exit(1);
 }
