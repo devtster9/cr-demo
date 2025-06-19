@@ -12,7 +12,7 @@ console.log("ENV OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "[SET]" : "[MISS
 console.log("ENV DOMAIN:", process.env.DOMAIN || "[MISSING]");
 
 if (!process.env.OPENAI_API_KEY || !DOMAIN) {
-  console.error("❌ Missing required environment variables");
+  console.error("❌ Missing required environment variables 1");
   process.exit(1);
 }
 
