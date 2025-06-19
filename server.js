@@ -13,6 +13,9 @@ if (!process.env.OPENAI_API_KEY || !DOMAIN) {
   process.exit(1);
 }
 
+console.log("ENV OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "[SET]" : "[MISSING]");
+console.log("ENV DOMAIN:", process.env.DOMAIN || "[MISSING]");
+
 const WS_URL = `wss://${DOMAIN}/ws`;
 const WELCOME_GREETING = "Hi! I am a voice assistant powered by Twilio and Open A I. Ask me anything!";
 const SYSTEM_PROMPT = "You are a helpful assistant. This conversation is being translated to voice...";
