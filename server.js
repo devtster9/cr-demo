@@ -8,13 +8,13 @@ dotenv.config();
 const PORT = process.env.PORT || 8080;
 const DOMAIN = process.env.DOMAIN;
 
+console.log("ENV OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "[SET]" : "[MISSING]");
+console.log("ENV DOMAIN:", process.env.DOMAIN || "[MISSING]");
+
 if (!process.env.OPENAI_API_KEY || !DOMAIN) {
   console.error("❌ Missing required environment variables");
   process.exit(1);
 }
-
-console.log("ENV OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "[SET]" : "[MISSING]");
-console.log("ENV DOMAIN:", process.env.DOMAIN || "[MISSING]");
 
 const WS_URL = `wss://${DOMAIN}/ws`;
 const WELCOME_GREETING = "Hi! I am a voice assistant powered by Twilio and Open A I. Ask me anything!";
