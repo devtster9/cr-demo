@@ -1,0 +1,28 @@
+# fly.toml file for cr-demo (ConversationRelay server)
+# Replace APP_NAME with your Fly app name (or it will be set during fly launch)
+
+app = "cr-demo-bold-fog-567"
+
+[build]
+
+[env]
+  PORT = "8080"  # Matches server.js PORT
+  DOMAIN = "cr-demo-bold-fog-567.fly.dev"  # Replace after first deploy
+
+[[services]]
+  internal_port = 8080  # Must match PORT in .env and server.js
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    interval = "10s"
+    timeout = "2s"
+    grace_period = "5s"
+    restart_limit = 0

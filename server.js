@@ -1,5 +1,3 @@
-// server.js (safe version)
-
 import Fastify from "fastify";
 import fastifyWs from "@fastify/websocket";
 import fastifyFormBody from "@fastify/formbody";
@@ -10,30 +8,22 @@ dotenv.config();
 const PORT = process.env.PORT || 8080;
 const DOMAIN = process.env.DOMAIN;
 
-// SAFETY CHECKS: prevent Fly unhealthy loops
-if (!process.env.OPENAI_API_KEY) {
-  console.error("❌ ERROR: Missing OPENAI_API_KEY — exiting.");
-  process.exit(1);
-}
-
-if (!DOMAIN) {
-  console.error("❌ ERROR: Missing DOMAIN — exiting.");
+if (!process.env.OPENAI_API_KEY || !DOMAIN) {
+  console.error("❌ Missing required environment variables");
   process.exit(1);
 }
 
 const WS_URL = `wss://${DOMAIN}/ws`;
-const WELCOME_GREETING =
-  "Hi! I am a voice assistant powered by Twilio and Open A I . Ask me anything!";
-const SYSTEM_PROMPT =
-  "You are a helpful assistant. This conversation is being translated to voice, so answer carefully. When you respond, please spell out all numbers, for example twenty not 20. Do not include emojis in your responses. Do not include bullet points, asterisks, or special symbols.";
-const sessions = new Map();
+const WELCOME_GREETING = "Hi! I am a voice assistant powered by Twilio and Open A I. Ask me anything!";
+const SYSTEM_PROMPT = "You are a helpful assistant. This conversation is being translated to voice...";
 
+const sessions = new Map();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 async function aiResponse(messages) {
-  let completion = await openai.chat.completions.create({
+  const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    messages: messages,
+    messages,
   });
   return completion.choices[0].message.content;
 }
@@ -42,17 +32,7 @@ const fastify = Fastify();
 fastify.register(fastifyWs);
 fastify.register(fastifyFormBody);
 
-fastify.all("/twiml", async (request, reply) => {
-  reply.type("text/xml").send(
-    `<?xml version="1.0" encoding="UTF-8"?>
-    <Response>
-      <Connect>
-        <ConversationRelay url="${WS_URL}" welcomeGreeting="${WELCOME_GREETING}" />
-      </Connect>
-    </Response>`
-  );
-});
-
+// ✅ Register WebSocket BEFORE server starts
 fastify.register(async function (fastify) {
   fastify.get("/ws", { websocket: true }, (ws, req) => {
     ws.on("message", async (data) => {
@@ -60,55 +40,48 @@ fastify.register(async function (fastify) {
 
       switch (message.type) {
         case "setup":
-          const callSid = message.callSid;
-          console.log("Setup for call:", callSid);
-          ws.callSid = callSid;
-          sessions.set(callSid, [{ role: "system", content: SYSTEM_PROMPT }]);
+          ws.callSid = message.callSid;
+          sessions.set(ws.callSid, [{ role: "system", content: SYSTEM_PROMPT }]);
           break;
-
         case "prompt":
-          console.log("Processing prompt:", message.voicePrompt);
-          const conversation = sessions.get(ws.callSid);
-          conversation.push({ role: "user", content: message.voicePrompt });
+          const convo = sessions.get(ws.callSid);
+          convo.push({ role: "user", content: message.voicePrompt });
+          const response = await aiResponse(convo);
+          convo.push({ role: "assistant", content: response });
 
-          const response = await aiResponse(conversation);
-          conversation.push({ role: "assistant", content: response });
-
-          ws.send(
-            JSON.stringify({
-              type: "text",
-              token: response,
-              last: true,
-            })
-          );
-          console.log("Sent response:", response);
+          ws.send(JSON.stringify({ type: "text", token: response, last: true }));
           break;
-
         case "interrupt":
-          console.log("Handling interruption.");
-          break;
-
-        default:
-          console.warn("Unknown message type received:", message.type);
+          console.log("Call interrupted");
           break;
       }
     });
 
     ws.on("close", () => {
-      console.log("WebSocket connection closed");
       sessions.delete(ws.callSid);
     });
   });
 });
 
-// ✅ Listen on 0.0.0.0 for Fly.io compatibility
-try {
-  fastify.listen({ port: PORT, host: "0.0.0.0" }, () => {
-    console.log(
-      `✅ Server running at http://localhost:${PORT} and wss://${DOMAIN}/ws`
-    );
-  });
-} catch (err) {
-  console.error("❌ Error starting server:", err);
-  process.exit(1);
-}
+// ✅ XML response for Twilio
+fastify.all("/twiml", async (request, reply) => {
+  reply.type("text/xml").send(`
+    <Response>
+      <Connect>
+        <ConversationRelay url="${WS_URL}" welcomeGreeting="${WELCOME_GREETING}" />
+      </Connect>
+    </Response>`);
+});
+
+// ✅ Listen on 0.0.0.0
+(async () => {
+  try {
+    //await fastify.listen({ port: PORT, host: "0.0.0.0" });
+    fastify.listen({ port: process.env.PORT || 8080, host: '0.0.0.0' });
+
+    console.log(`✅ App live at http://localhost:${PORT} and wss://${DOMAIN}/ws`);
+  } catch (err) {
+    console.error("❌ Error starting server:", err);
+    process.exit(1);
+  }
+})();
